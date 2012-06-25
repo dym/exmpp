@@ -750,34 +750,34 @@ stream_opened({login, basic, Method}, From, State=#state{connection = Module,
     {next_state, wait_for_legacy_auth_method, State#state{from_pid=From, auth_method=Method}};
 
 %% Login using SASL mechanism
-stream_opened({login, sasl, "PLAIN"}, From, State=#state{connection = Module,
-					  connection_ref = ConnRef,
-					  auth_info=Auth}) ->
+stream_opened({login, sasl, "PLAIN" = Mech}, From, State=#state{connection = Module,
+					     connection_ref = ConnRef,
+					     auth_info=Auth}) ->
  %     Domain = get_domain(Auth),
     Username = get_username(Auth),
     Password = get_password(Auth),
  %     InitialResp = iolist_to_binary([Domain, 0, Username, 0, Password]),
     InitialResp = iolist_to_binary([0, Username, 0, Password]),
     Module:send(ConnRef,
- 		exmpp_client_sasl:selected_mechanism("PLAIN", InitialResp)),
-    {next_state, wait_for_sasl_response, State#state{from_pid=From}};
-stream_opened({login, sasl, "ANONYMOUS"}, From, State=#state{connection = Module,
-					  connection_ref = ConnRef
-					  }) ->
-    Module:send(ConnRef, exmpp_client_sasl:selected_mechanism("ANONYMOUS")),
-    {next_state, wait_for_sasl_response, State#state{from_pid=From}};
-stream_opened({login, sasl, "DIGEST-MD5"}, From, State=#state{connection = Module,
-					  connection_ref = ConnRef,
-                                          auth_info = Auth,
-                                          host = Host
-					  }) ->
+ 		exmpp_client_sasl:selected_mechanism(Mech, InitialResp)),
+    {next_state, wait_for_sasl_response, State#state{from_pid=From, auth_method=Mech}};
+stream_opened({login, sasl, "ANONYMOUS" = Mech}, From, State=#state{connection = Module,
+					         connection_ref = ConnRef
+					         }) ->
+    Module:send(ConnRef, exmpp_client_sasl:selected_mechanism(Mech)),
+    {next_state, wait_for_sasl_response, State#state{from_pid=From, auth_method=Mech}};
+stream_opened({login, sasl, Mech}, From, State=#state{connection = Module,
+                                   connection_ref = ConnRef,
+                                   auth_info = Auth,
+                                   host = Host
+                                   }) ->
     Username = get_username(Auth),
     Domain = get_domain(Auth),
     Password = get_password(Auth),
-    {ok, SASL_State} = exmpp_sasl_digest:mech_client_new(Username, Host, Domain, Password),
-    Module:send(ConnRef, exmpp_client_sasl:selected_mechanism("DIGEST-MD5")),
-    {next_state, wait_for_sasl_response, State#state{from_pid=From, sasl_state=SASL_State }};
-
+    {ok, SASL_State} = sasl_mech_new(Mech, Username, Host, Domain, Password),
+    Module:send(ConnRef, exmpp_client_sasl:selected_mechanism(Mech)),
+    {next_state, wait_for_sasl_response, State#state{from_pid=From, sasl_state=SASL_State, 
+                                                     auth_method=Mech}};
 stream_opened({register_account, Password}, From,
 	      State=#state{connection_ref = ConnRef,
                             connection = Module,
@@ -847,10 +847,11 @@ wait_for_sasl_response(#xmlstreamelement{element=#xmlel{name='success'}}, State)
     ok = Module:send(ConnRef, exmpp_stream:opening(Domain, ?NS_JABBER_CLIENT, {1,0})),
     {next_state, wait_for_stream, State#state{authenticated = true}};
 
-wait_for_sasl_response(#xmlstreamelement{element=#xmlel{name='challenge'} = Element}, State) ->
-    #state{connection = Module, connection_ref = ConnRef, sasl_state = SASL_State} = State,
+wait_for_sasl_response(#xmlstreamelement{element=#xmlel{name='challenge'} = Element}, 
+                       #state{connection = Module, connection_ref = ConnRef, sasl_state = SASL_State,
+                              auth_method = Mech} = State) ->
     Challenge = base64:decode_to_string(exmpp_xml:get_cdata(Element)),
-    case exmpp_sasl_digest:mech_step(SASL_State, Challenge) of
+    case sasl_mech_step(Mech, SASL_State, Challenge) of
          {error, Reason} ->
               {error, Reason};
          {continue, ClientIn, NewSASL_State} ->
@@ -980,6 +981,17 @@ logged_in(_Packet, State) ->
 %%--------------------------------------------------------------------
 %% Internal functions
 %%--------------------------------------------------------------------
+
+%% SASL helpers
+sasl_mech_new("DIGEST-MD5", Username, Host, Domain, Password) ->
+    exmpp_sasl_digest:mech_client_new(Username, Host, Domain, Password);
+sasl_mech_new("X-FACEBOOK-PLATFORM", Username, Host, Domain, Token) ->
+    exmpp_sasl_facebook:mech_client_new(Username, Host, Domain, Token).
+
+sasl_mech_step("DIGEST-MD5", SASL_State, Challenge) ->
+    exmpp_sasl_digest:mech_step(SASL_State, Challenge);
+sasl_mech_step("X-FACEBOOK-PLATFORM", SASL_State, Challenge) ->
+    exmpp_sasl_facebook:mech_step(SASL_State, Challenge).
 
 %% Connect to server
 connect(Module, Params, From, State) ->
