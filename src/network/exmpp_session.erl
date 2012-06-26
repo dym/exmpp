@@ -60,7 +60,7 @@
 %% XMPP Session API:
 -export([start/0, start_link/0, start/1, start_link/1,start_debug/0, stop/1]).
 -export([auth_basic/3, auth_basic_digest/3,
-         auth_info/3, auth_method/2, auth/4,
+         auth_info/3, auth_info/4, auth_method/2, auth/4,
 	 connect_SSL/2, connect_SSL/3, connect_SSL/4,
 	 connect_TCP/2, connect_TCP/3, connect_TCP/4,
 	 connect_BOSH/4,
@@ -201,6 +201,17 @@ auth_info(Session, JID, Password)
 	false -> erlang:error({incorrect_jid,JID});
 	true ->
 	    Info = {JID, Password},
+	    gen_fsm:sync_send_event(Session, {set_auth_info, Info})
+    end.
+
+auth_info(Session, JID, AccessToken, AppId)
+  when is_pid(Session),
+       is_list(AccessToken),
+       is_list(AppId) ->
+    case exmpp_jid:is_jid(JID) of
+	false -> erlang:error({incorrect_jid,JID});
+	true ->
+	    Info = {JID, {AccessToken, AppId}},
 	    gen_fsm:sync_send_event(Session, {set_auth_info, Info})
     end.
 
@@ -766,7 +777,7 @@ stream_opened({login, sasl, "ANONYMOUS" = Mech}, From, State=#state{connection =
 					         }) ->
     Module:send(ConnRef, exmpp_client_sasl:selected_mechanism(Mech)),
     {next_state, wait_for_sasl_response, State#state{from_pid=From, auth_method=Mech}};
-stream_opened({login, sasl, Mech}, From, State=#state{connection = Module,
+stream_opened({login, sasl, "DIGEST-MD5" = Mech}, From, State=#state{connection = Module,
                                    connection_ref = ConnRef,
                                    auth_info = Auth,
                                    host = Host
@@ -774,7 +785,17 @@ stream_opened({login, sasl, Mech}, From, State=#state{connection = Module,
     Username = get_username(Auth),
     Domain = get_domain(Auth),
     Password = get_password(Auth),
-    {ok, SASL_State} = sasl_mech_new(Mech, Username, Host, Domain, Password),
+    {ok, SASL_State} = exmpp_sasl_digest:mech_client_new(Username, Host, Domain, Password),
+    Module:send(ConnRef, exmpp_client_sasl:selected_mechanism(Mech)),
+    {next_state, wait_for_sasl_response, State#state{from_pid=From, sasl_state=SASL_State, 
+                                                     auth_method=Mech}};
+stream_opened({login, sasl, "X-FACEBOOK-PLATFORM" = Mech}, From, State=#state{connection = Module,
+                                   connection_ref = ConnRef,
+                                   auth_info = Auth
+                                   }) ->
+    AccessToken = get_access_token(Auth),
+    AppId = get_app_id(Auth),
+    {ok, SASL_State} = exmpp_sasl_facebook:mech_client_new(AccessToken, AppId),
     Module:send(ConnRef, exmpp_client_sasl:selected_mechanism(Mech)),
     {next_state, wait_for_sasl_response, State#state{from_pid=From, sasl_state=SASL_State, 
                                                      auth_method=Mech}};
@@ -849,9 +870,23 @@ wait_for_sasl_response(#xmlstreamelement{element=#xmlel{name='success'}}, State)
 
 wait_for_sasl_response(#xmlstreamelement{element=#xmlel{name='challenge'} = Element}, 
                        #state{connection = Module, connection_ref = ConnRef, sasl_state = SASL_State,
-                              auth_method = Mech} = State) ->
+                              auth_method = "DIGEST-MD5"} = State) ->
     Challenge = base64:decode_to_string(exmpp_xml:get_cdata(Element)),
-    case sasl_mech_step(Mech, SASL_State, Challenge) of
+    case exmpp_sasl_digest:mech_step(SASL_State, Challenge) of
+         {error, Reason} ->
+              {error, Reason};
+         {continue, ClientIn, NewSASL_State} ->
+             Module:send(ConnRef, exmpp_client_sasl:response(ClientIn)),
+             {next_state, wait_for_sasl_response, State#state{sasl_state= NewSASL_State} };
+         ok ->
+            Module:send(ConnRef, exmpp_client_sasl:response("")),
+            {next_state, wait_for_sasl_response, State }
+    end;
+wait_for_sasl_response(#xmlstreamelement{element=#xmlel{name='challenge'} = Element}, 
+                       #state{connection = Module, connection_ref = ConnRef, sasl_state = SASL_State,
+                              auth_method = "X-FACEBOOK-PLATFORM"} = State) ->
+    Challenge = base64:decode_to_string(exmpp_xml:get_cdata(Element)),
+    case exmpp_sasl_facebook:mech_step(SASL_State, Challenge) of
          {error, Reason} ->
               {error, Reason};
          {continue, ClientIn, NewSASL_State} ->
@@ -861,6 +896,7 @@ wait_for_sasl_response(#xmlstreamelement{element=#xmlel{name='challenge'} = Elem
             Module:send(ConnRef, exmpp_client_sasl:response("")),
             {next_state, wait_for_sasl_response, State }
     end.
+
 
 stream_error(_Signal, _From, State) ->
     {reply, {stream_error, State#state.stream_error}, stream_error, State}.
@@ -982,17 +1018,6 @@ logged_in(_Packet, State) ->
 %% Internal functions
 %%--------------------------------------------------------------------
 
-%% SASL helpers
-sasl_mech_new("DIGEST-MD5", Username, Host, Domain, Password) ->
-    exmpp_sasl_digest:mech_client_new(Username, Host, Domain, Password);
-sasl_mech_new("X-FACEBOOK-PLATFORM", Username, Host, Domain, Token) ->
-    exmpp_sasl_facebook:mech_client_new(Username, Host, Domain, Token).
-
-sasl_mech_step("DIGEST-MD5", SASL_State, Challenge) ->
-    exmpp_sasl_digest:mech_step(SASL_State, Challenge);
-sasl_mech_step("X-FACEBOOK-PLATFORM", SASL_State, Challenge) ->
-    exmpp_sasl_facebook:mech_step(SASL_State, Challenge).
-
 %% Connect to server
 connect(Module, Params, From, State) ->
     Domain = get_domain(State#state.auth_info),
@@ -1069,6 +1094,10 @@ get_resource({JID, _Password}) when ?IS_JID(JID) ->
  %     Password;
 get_password({_JID, Password}) when is_list(Password) ->
     Password.
+get_access_token({_JID, {AccessToken, _AppId}}) when is_list(AccessToken) ->
+    AccessToken.
+get_app_id({_JID, {_AccessToken, AppId}}) when is_list(AppId) ->
+    AppId.
  % get_jid({_, _Method, JID, _Password}) when ?IS_JID(JID) ->
  %     JID;
 get_jid({JID, _Password}) when ?IS_JID(JID) ->
