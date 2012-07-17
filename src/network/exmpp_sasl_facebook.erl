@@ -50,11 +50,14 @@ mech_step(#state{step = 1, access_token = AccessToken, app_id = AppId} = State, 
         KeyVals ->
             Nonce = proplists:get_value("nonce", KeyVals),
             Method = proplists:get_value("method", KeyVals),
+            CallId = integer_to_list(element(2, now())),
             {continue,
-             "method=\"" ++ Method ++ "\",nonce=\"" ++ Nonce ++
-                 ",access_token=\"" ++ AccessToken ++"\"" ++
-                 ",api_key=\"" ++ AppId ++"\"" ++
-                 ",call_id=\"0\"" ++ ",v=\"0.1\"",
+             string:join(["method=" ++ Method,
+                          "api_key=" ++ AppId,
+                          "access_token=" ++ AccessToken,
+                          "call_id=" ++ CallId,
+                          "v=1.0",
+                          "nonce=" ++ Nonce], "&"),
              State#state{step = 2}}
     end;
 mech_step(#state{step = 2}, ServerOut) ->
