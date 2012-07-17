@@ -42,6 +42,7 @@
         exmpp_server_session,
         exmpp_server_tls,
         exmpp_sasl_digest,
+        exmpp_sasl_facebook,
         exmpp_session,
         exmpp_socket@COMPAT_MODULES_START@
         @COMPAT_MODULES@ejabberd_socket,
