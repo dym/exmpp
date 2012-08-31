@@ -1,0 +1,12 @@
+exmpp (0.9.10-1) unstable; urgency=low
+
+  * Add support for X-FACEBOOK-AUTH
+
+ -- Oleg Smirnov <oleg.smirnov@gmail.com>  Tue, 17 Jul 2012 18:24:50 +0300
+
+exmpp (0.9.7-1) unstable; urgency=low
+
+  * initial prerelease
+
+ -- Oleg Smirnov <oleg.smirnov@gmail.com>  Mon, 08 Aug 2011 11:00:22 +0300
+
