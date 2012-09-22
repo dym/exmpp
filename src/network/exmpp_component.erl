@@ -531,25 +531,9 @@ get_attribute_value(Attrs, Attr, Default) ->
 %% Internal operations
 %% send_packet: actually format and send the packet:
 send_packet(#xmlel{name=iq, attrs=Attrs}=IQElement, Module, ConnRef) ->
-    Type = exmpp_xml:get_attribute_from_list_as_binary(Attrs, <<"type">>, undefined),
-    case Type of
-	<<"error">> ->
-	    {Attrs2, PacketId} = check_id(Attrs),
-	    Module:send(ConnRef, IQElement#xmlel{attrs=Attrs2}),
-	    PacketId;
-	<<"result">> ->
-	    {Attrs2, PacketId} = check_id(Attrs),
-	    Module:send(ConnRef, IQElement#xmlel{attrs=Attrs2}),
-	    PacketId;
-	<<"set">> ->
-	    {Attrs2, PacketId} = check_id(Attrs),
-	    Module:send(ConnRef, IQElement#xmlel{attrs=Attrs2}),
-	    PacketId;
-	<<"get">> ->
-	    {Attrs2, PacketId} = check_id(Attrs),
-	    Module:send(ConnRef, IQElement#xmlel{attrs=Attrs2}),
-	    PacketId
-    end;
+    {Attrs2, PacketId} = check_id(Attrs),
+    Module:send(ConnRef, IQElement#xmlel{attrs=Attrs2}),
+    PacketId;
 send_packet(#xmlel{attrs=Attrs}=Element, Module, ConnRef) ->
     {Attrs2, Id} = check_id(Attrs),
     Module:send(ConnRef, Element#xmlel{attrs=Attrs2}),
