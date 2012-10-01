@@ -98,7 +98,8 @@ AC_ARG_ENABLE([debug],
 if test "x${enable_debug}" = "xyes"; then
 	dnl AC_DEFINE([DEBUG], [], [Enable debug])
 	append_to_EMKOPTS "debug_info"
-	append_to_EMKOPTS "{d, debug}"
+        # Disabled, because of conflicts with alogger
+	#append_to_EMKOPTS "{d, debug}"
 else
 	CPPFLAGS="-DNDEBUG ${CPPFLAGS# }"
 fi
