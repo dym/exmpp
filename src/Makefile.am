@@ -77,7 +77,7 @@ exmpp_known_attrs.erl: $(srcdir)/core/exmpp_known_attrs.erl.awk $(KNOWN_ATTRS_SO
 	$(AWK) -f $(srcdir)/core/exmpp_known_attrs.erl.awk $(KNOWN_ATTRS_SOURCE) > $@
 
 all-local:
-	@$(ERL) +B -noshell -pa @top_builddir@/ebin			\
+	@ERL_LIBS="../deps" $(ERL) +B -noshell -pa @top_builddir@/ebin			\
 		-eval "case make:all() of				\
 		         up_to_date -> halt(0);				\
 		         Err ->						\

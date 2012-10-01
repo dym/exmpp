@@ -20,6 +20,12 @@ endif
 EXTRA_DIST =
 distdir = $(PACKAGE)-$(VERSION)
 
+all: config.h
+	@rm -rf deps/alogger deps/alog
+	@rebar get-deps
+	@mv deps/alog deps/alogger
+	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+
 if ENABLE_TESTSUITE
 check-junit: all
 	cd testsuite && $(MAKE) $(AM_MAKEFLAGS) $@ || exit 1
