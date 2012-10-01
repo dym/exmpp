@@ -30,6 +30,7 @@
 %% Internal export
 -export([receiver/3]).
 
+-include_lib("alogger/include/alog.hrl").
 
 % None implemented so far.
 get_property(_Socket, _Prop) ->
@@ -80,7 +81,7 @@ close(_Socket, ReceiverPid) ->
 
 send(Socket, XMLPacket) when is_tuple(XMLPacket) ->
     Bin = exmpp_xml:document_to_binary(XMLPacket),
- %     io:format("- SENDING:~n~s~n", [Bin]),
+    ?DBG("- SENDING:~n~s~n", [Bin]),
     exmpp_internals:gen_send(Socket, Bin).
 
 wping(Socket) ->
@@ -129,12 +130,12 @@ receiver_loop(ClientPid, ESocket, StreamRef) ->
 	    receiver_loop(ClientPid, TSocket, StreamRef);
         {tcp, Socket, Data} ->
             {ok, Str} = recv_data(ESocket, Data),
- %             io:format("- RECEIVING:~n~s~n", [Str]),
+            ?DBG("- RECEIVING:~n~s~n", [Str]),
 	    {ok, NewStreamRef} = exmpp_xmlstream:parse(StreamRef, Str),
 	    receiver_loop(ClientPid, ESocket, NewStreamRef);
 	{ssl, Socket, Data} ->
             {ok, Str} = recv_data(ESocket, Data),
- %             io:format("- RECEIVING:~n~s~n", [Str]),
+            ?DBG("- RECEIVING:~n~s~n", [Str]),
 	    {ok, NewStreamRef} = exmpp_xmlstream:parse(StreamRef, Str),
 	    receiver_loop(ClientPid, ESocket, NewStreamRef);
 	{tcp_closed, Socket} ->

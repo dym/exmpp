@@ -2,12 +2,12 @@ Source: exmpp
 Section: libs
 Priority: extra
 Maintainer: Oleg Smirnov <oleg.smirnov@gmail.com>
-Build-Depends: debhelper (>= 7.3~), dh-autoreconf, erlang-base, erlang-dev, libssl-dev, libexpat1-dev
+Build-Depends: debhelper (>= 7.3~), dh-autoreconf, erlang-base, erlang-dev, libssl-dev, libexpat1-dev, alogger
 Standards-Version: 3.9.1
 Homepage: https://support.process-one.net/doc/display/EXMPP/exmpp+home
 
 Package: exmpp
 Architecture: any
-Depends: erlang
+Depends: erlang, alogger
 Description: exmpp is a fast and scalable library for the Extensible Messaging
  and Presence Protocol (XMPP) written in Erlang/OTP.
